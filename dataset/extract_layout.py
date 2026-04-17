@@ -9,14 +9,17 @@ def normalize_bbox(bounds,w,h):
     return [x1/w,y1/h,x2/w,y2/h]
 
 def extract_elements(node,w,h,elements):
+    if not isinstance(node, dict):
+        return
+
     if "bounds" in node and "componentLabel" in node:
         label=node["componentLabel"] 
         if label in ALLOWED_TYPES:
             bbox=normalize_bbox(node["bounds"],w,h) 
             elements.append({"type":label,"bbox":bbox}) 
-            
-            for child in node.get("children",[]):
-                extract_elements(child,w,h,elements) 
+
+    for child in node.get("children",[]):
+        extract_elements(child,w,h,elements) 
 
 
 def process_rico_json(path):
