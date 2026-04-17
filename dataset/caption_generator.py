@@ -1,6 +1,8 @@
-import os
 import json
+import logging
 from collections import Counter
+
+logger=logging.getLogger(__name__)
 
 def generate_caption(layout):
     types=[el["type"] for el in layout["elements"]]
@@ -16,6 +18,8 @@ def generate_caption(layout):
 def generate_all_captions(input_json, output_json):
     with open(input_json, 'r') as f:
         layouts = json.load(f)
+
+    logger.info("Generating captions for %s layouts from %s",len(layouts),input_json)
         
     for layout in layouts:
         layout["caption"] = generate_caption(layout)
@@ -23,6 +27,6 @@ def generate_all_captions(input_json, output_json):
     with open(output_json, 'w') as f:
         json.dump(layouts, f, indent=2)
         
-    print("Captions generated") 
+    logger.info("Captions generated at %s",output_json)
     
     
