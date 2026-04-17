@@ -1,3 +1,4 @@
+import logging
 import os
 
 import torch 
@@ -11,6 +12,8 @@ from training.dataset import LayoutDataset
 from training.controlnet import ControlNet
 from models.layout_encoder import LayoutEncoder
 from models.fusion import ConditioningFusion
+
+logger=logging.getLogger(__name__)
 
 class Trainer:
     def __init__(self,config):
@@ -28,6 +31,7 @@ class Trainer:
         
         # Dataset
         self.dataset=LayoutDataset(config['train_json'],config['tensor_dir'],config['image_dir'])
+        logger.info("Loaded dataset with %s samples from %s",len(self.dataset),config['train_json'])
         
         self.loader=DataLoader(
             self.dataset,
@@ -37,8 +41,12 @@ class Trainer:
             pin_memory=torch.cuda.is_available()
         )
         
-        
-        # Load Stable Diffusion Model 
+        logger.info(
+            "Initializing Stable Diffusion base model %s on %s with %s precision",
+            config.get('base_model',"runwayml/stable-diffusion-v1-5"),
+            self.device,
+            precision,
+        )
         self.pipe=StableDiffusionPipeline.from_pretrained(
             config.get('base_model',"runwayml/stable-diffusion-v1-5"),
             torch_dtype=self.weight_dtype
@@ -58,8 +66,8 @@ class Trainer:
         self.scheduler=DDPMScheduler(num_train_timesteps=1000)
         self.output_dir=config.get('output_dir','checkpoints')
         os.makedirs(self.output_dir,exist_ok=True)
-        
-        # Optimizer
+        self.log_every=max(1,int(config.get('log_every',25)))
+        self.global_step=0
         
         self.optimizer=torch.optim.AdamW(
             list(self.unet.parameters())
@@ -67,6 +75,13 @@ class Trainer:
             + list(self.layout_encoder.parameters())
             + list(self.fusion.parameters()),
             lr=config['lr']
+        )
+        logger.info(
+            "Trainer ready: batch_size=%s, lr=%s, output_dir=%s, steps_per_epoch=%s",
+            config['batch_size'],
+            config['lr'],
+            self.output_dir,
+            len(self.loader),
         )
         
     def encode_text(self,captions):
@@ -127,20 +142,34 @@ class Trainer:
             'fusion':self.fusion.state_dict(),
             'optimizer':self.optimizer.state_dict()
         },checkpoint_path)
+        logger.info("Saved checkpoint: %s",checkpoint_path)
         return checkpoint_path
 
     def train(self,epochs):
+        logger.info("Starting training for %s epoch(s)",epochs)
         for epoch in range(epochs):
-            loop=tqdm(self.loader)
+            logger.info("Epoch %s/%s started",epoch+1,epochs)
+            loop=tqdm(self.loader,desc=f"Epoch {epoch+1}/{epochs}")
             
-            for batch in loop:
+            for batch_idx, batch in enumerate(loop, start=1):
                 self.optimizer.zero_grad()
                 
                 loss=self.train_step(batch)
                 loss.backward()
                 self.optimizer.step()
+                self.global_step += 1
                 
-                loop.set_description(f"Epoch [{epoch+1}/{epochs}]")
                 loop.set_postfix(loss=loss.item())
+                if self.global_step == 1 or self.global_step % self.log_every == 0:
+                    logger.info(
+                        "step=%s epoch=%s/%s batch=%s loss=%.6f",
+                        self.global_step,
+                        epoch + 1,
+                        epochs,
+                        batch_idx,
+                        loss.item(),
+                    )
             
             self.save_checkpoint(epoch+1)
+            logger.info("Epoch %s/%s complete",epoch+1,epochs)
+        logger.info("Training finished")

@@ -6,25 +6,31 @@ ALLOWED_TYPES=["Text", "Button", "Image", "Input", "Icon", "Toolbar", "List Item
 # w = width, h = height
 def normalize_bbox(bounds,w,h):
     x1,y1,x2,y2=bounds
+    w=max(w,1)
+    h=max(h,1)
     return [x1/w,y1/h,x2/w,y2/h]
 
 def extract_elements(node,w,h,elements):
+    if not isinstance(node, dict):
+        return
+
     if "bounds" in node and "componentLabel" in node:
         label=node["componentLabel"] 
         if label in ALLOWED_TYPES:
             bbox=normalize_bbox(node["bounds"],w,h) 
             elements.append({"type":label,"bbox":bbox}) 
-            
-            for child in node.get("children",[]):
-                extract_elements(child,w,h,elements) 
+
+    for child in node.get("children",[]):
+        extract_elements(child,w,h,elements) 
 
 
 def process_rico_json(path):
     with open(path,'r') as f:
         data=json.load(f)
         
-    w=data.get("bounds",[0,0,1440,2560])[2]
-    h=data.get("bounds",[0,0,1440,2560])[3] 
+    bounds=data.get("bounds",[0,0,1440,2560])
+    w=bounds[2] if len(bounds) >= 4 and bounds[2] > 0 else 1440
+    h=bounds[3] if len(bounds) >= 4 and bounds[3] > 0 else 2560
     
     elements=[]
     extract_elements(data,w,h,elements)

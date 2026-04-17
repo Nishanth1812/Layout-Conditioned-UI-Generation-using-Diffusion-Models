@@ -1,4 +1,6 @@
 import argparse
+import logging
+import os
 
 from training.train import Trainer
 
@@ -15,11 +17,17 @@ def build_parser():
     parser.add_argument("--num-workers",type=int,default=2,help="DataLoader worker count.")
     parser.add_argument("--precision",choices=["fp32","fp16","bf16"],default="fp16",help="Weights precision to use.")
     parser.add_argument("--base-model",default="runwayml/stable-diffusion-v1-5",help="Diffusers base model id.")
+    parser.add_argument("--log-every",type=int,default=25,help="How often to log training step output.")
     return parser
 
 
 def main():
     args=build_parser().parse_args()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+    os.environ.setdefault("PYTHONUNBUFFERED", "1")
     config={
         "train_json":args.train_json,
         "tensor_dir":args.tensor_dir,
@@ -30,7 +38,9 @@ def main():
         "num_workers":args.num_workers,
         "precision":args.precision,
         "base_model":args.base_model,
+        "log_every":args.log_every,
     }
+    logging.getLogger(__name__).info("Launching training with config: %s",config)
     trainer=Trainer(config)
     trainer.train(args.epochs)
 
