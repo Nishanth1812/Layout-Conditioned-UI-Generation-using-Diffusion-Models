@@ -7,12 +7,12 @@ class ControlNetEncoder(nn.Module):
         super().__init__()
         
         self.initial=nn.Sequential(
-            nn.Conv2d(10,32,kernel_size=3,pading=1),
+            nn.Conv2d(10,32,kernel_size=3,padding=1),
             nn.ReLU(inplace=True)
         )
         
         self.up1=nn.Sequential(
-            nn.Upsample(scale_Factor=2,mode='bilinear',align_corners=False),
+            nn.Upsample(scale_factor=2,mode='bilinear',align_corners=False),
             nn.Conv2d(32,64,kernel_size=3,padding=1),
             nn.ReLU(inplace=True)
         )
@@ -24,4 +24,3 @@ class ControlNetEncoder(nn.Module):
         x=self.up1(x)
         x=self.final(x)
         return x
-    

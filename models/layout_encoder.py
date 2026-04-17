@@ -6,7 +6,7 @@ class ConvBlock(nn.Module):
         super().__init__()
         
         self.block=nn.Sequential(
-            nn.Conv2d(in_channels,out_channels,kernel_size=3,stide=2,padding=1),
+            nn.Conv2d(in_channels,out_channels,kernel_size=3,stride=2,padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
@@ -17,7 +17,7 @@ class ConvBlock(nn.Module):
     
 class LayoutEncoder(nn.Module):
     
-    def __init__(self,in_channels=10,embed_dim=1024):
+    def __init__(self,in_channels=10,embed_dim=768):
         super().__init__()
         
         self.conv_stack=nn.Sequential(
@@ -28,7 +28,7 @@ class LayoutEncoder(nn.Module):
             ConvBlock(in_channels=256,out_channels=512),   # -> (B,512,2,2)
         )
         
-        self.flatten=nn.flatten()
+        self.flatten=nn.Flatten()
         self.fc=nn.Linear(512*2*2,embed_dim)
         
     def forward(self,x):
