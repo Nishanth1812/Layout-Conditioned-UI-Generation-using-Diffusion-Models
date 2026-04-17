@@ -19,6 +19,7 @@ def build_parser():
     parser.add_argument("--base-model",default="stable-diffusion-v1-5/stable-diffusion-v1-5",help="Diffusers base model id or local path.")
     parser.add_argument("--hf-token",default=None,help="Optional Hugging Face token for gated models.")
     parser.add_argument("--log-every",type=int,default=25,help="How often to log training step output.")
+    parser.add_argument("--resume-from",default=None,help="Optional checkpoint path to resume training from.")
     return parser
 
 
@@ -41,6 +42,7 @@ def main():
         "base_model":args.base_model,
         "hf_token":args.hf_token,
         "log_every":args.log_every,
+        "resume_from":args.resume_from,
     }
     logging.getLogger(__name__).info("Launching training with config: %s",config)
     trainer=Trainer(config)

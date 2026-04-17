@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 import torch 
 from torch.utils.data import DataLoader
@@ -53,7 +54,10 @@ class Trainer:
             self.device,
             precision,
         )
-        self.pipe=StableDiffusionPipeline.from_pretrained(self.base_model, torch_dtype=self.weight_dtype)
+        pretrained_kwargs={"torch_dtype":self.weight_dtype}
+        if self.hf_token:
+            pretrained_kwargs["token"]=self.hf_token
+        self.pipe=StableDiffusionPipeline.from_pretrained(self.base_model, **pretrained_kwargs)
         self.pipe.to(self.device)
         
         self.unet=self.pipe.unet
@@ -71,6 +75,7 @@ class Trainer:
         os.makedirs(self.output_dir,exist_ok=True)
         self.log_every=max(1,int(config.get('log_every',25)))
         self.global_step=0
+        self.start_epoch=0
         
         self.optimizer=torch.optim.AdamW(
             list(self.unet.parameters())
@@ -79,6 +84,11 @@ class Trainer:
             + list(self.fusion.parameters()),
             lr=config['lr']
         )
+
+        resume_from=config.get('resume_from') or self._latest_checkpoint()
+        if resume_from:
+            self.load_checkpoint(resume_from)
+            logger.info("Resumed training from %s",resume_from)
         logger.info(
             "Trainer ready: batch_size=%s, lr=%s, output_dir=%s, steps_per_epoch=%s",
             config['batch_size'],
@@ -86,6 +96,10 @@ class Trainer:
             self.output_dir,
             len(self.loader),
         )
+
+    def _latest_checkpoint(self):
+        checkpoints=sorted(Path(self.output_dir).glob("checkpoint_epoch_*.pt"))
+        return str(checkpoints[-1]) if checkpoints else None
         
     def encode_text(self,captions):
         tokens=self.tokenizer(captions,padding="max_length",max_length=77,truncation=True,return_tensors="pt")
@@ -138,6 +152,7 @@ class Trainer:
         checkpoint_path=os.path.join(self.output_dir,f"checkpoint_epoch_{epoch}.pt")
         torch.save({
             'epoch':epoch,
+            'global_step':self.global_step,
             'config':self.config,
             'unet':self.unet.state_dict(),
             'controlnet':self.controlnet.state_dict(),
@@ -148,9 +163,20 @@ class Trainer:
         logger.info("Saved checkpoint: %s",checkpoint_path)
         return checkpoint_path
 
+    def load_checkpoint(self,checkpoint_path):
+        checkpoint=torch.load(checkpoint_path,map_location=self.device)
+        self.unet.load_state_dict(checkpoint['unet'])
+        self.controlnet.load_state_dict(checkpoint['controlnet'])
+        self.layout_encoder.load_state_dict(checkpoint['layout_encoder'])
+        self.fusion.load_state_dict(checkpoint['fusion'])
+        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        self.global_step=int(checkpoint.get('global_step',0))
+        self.start_epoch=int(checkpoint.get('epoch',0))
+        logger.info("Loaded checkpoint epoch=%s global_step=%s",self.start_epoch,self.global_step)
+
     def train(self,epochs):
         logger.info("Starting training for %s epoch(s)",epochs)
-        for epoch in range(epochs):
+        for epoch in range(self.start_epoch, epochs):
             logger.info("Epoch %s/%s started",epoch+1,epochs)
             loop=tqdm(self.loader,desc=f"Epoch {epoch+1}/{epochs}")
             
