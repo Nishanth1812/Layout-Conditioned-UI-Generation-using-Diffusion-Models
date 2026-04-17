@@ -24,3 +24,5 @@ bash scripts/run_training.sh
 - Raw screenshots should be placed in `/mnt/scratch/ui-gen/data/raw/images`.
 - Raw UI JSON files should be placed in `/mnt/scratch/ui-gen/data/raw/json`.
 - You can override paths and hyperparameters by exporting environment variables before running the scripts.
+- Training now defaults to the public Stable Diffusion v1.5 mirror at `stable-diffusion-v1-5/stable-diffusion-v1-5`.
+- If you want to use the gated `runwayml/stable-diffusion-v1-5` checkpoint instead, export `HF_TOKEN` before training.

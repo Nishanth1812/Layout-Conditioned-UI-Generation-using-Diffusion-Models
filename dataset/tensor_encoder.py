@@ -1,6 +1,8 @@
+import json
+import logging
+import os
+
 import numpy as np 
-import os 
-import json 
 TYPE_TO_CHANNEL = {
     "Text": 0,
     "Button": 1,
@@ -16,6 +18,7 @@ TYPE_TO_CHANNEL = {
 
 GRID_SIZE=64
 CHANNELS=10
+logger=logging.getLogger(__name__)
 
 def encode_layout_to_tensor(layout):
     grid=np.zeros((GRID_SIZE,GRID_SIZE,CHANNELS),dtype=np.float32)
@@ -40,10 +43,12 @@ def process_all_layouts(input_json,output_dir):
     
     with open(input_json,'r') as f:
         layouts=json.load(f)
+
+    logger.info("Encoding %s layouts into tensors at %s",len(layouts),output_dir)
         
     for layout in layouts:
         tensor=encode_layout_to_tensor(layout)
         np.save(os.path.join(output_dir,layout["image_id"]+".npy"),tensor)
-    
-    print("Saved tensors")
+
+    logger.info("Saved tensors to %s",output_dir)
         

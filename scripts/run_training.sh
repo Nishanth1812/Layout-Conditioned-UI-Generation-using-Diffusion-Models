@@ -12,6 +12,7 @@ cd "$REPO_DIR"
 echo "[train] starting training"
 exec python -u -m training.run_train \
   --train-json "${TRAIN_JSON:-$SCRATCH_ROOT/data/processed/splits/train.json}" \
+  --val-json "${VAL_JSON:-$SCRATCH_ROOT/data/processed/splits/val.json}" \
   --tensor-dir "${TENSOR_DIR:-$SCRATCH_ROOT/data/processed/tensors}" \
   --image-dir "${IMAGE_DIR:-$SCRATCH_ROOT/data/raw/images}" \
   --output-dir "${OUTPUT_DIR:-$SCRATCH_ROOT/checkpoints}" \
@@ -20,5 +21,6 @@ exec python -u -m training.run_train \
   --lr "${LR:-1e-4}" \
   --num-workers "${NUM_WORKERS:-2}" \
   --precision "${PRECISION:-fp16}" \
-  --base-model "${BASE_MODEL:-runwayml/stable-diffusion-v1-5}" \
+  --base-model "${BASE_MODEL:-stable-diffusion-v1-5/stable-diffusion-v1-5}" \
+  --hf-token "${HF_TOKEN:-}" \
   --log-every "${LOG_EVERY:-25}"

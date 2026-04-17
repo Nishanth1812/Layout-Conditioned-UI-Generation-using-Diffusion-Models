@@ -1,6 +1,8 @@
-import os
 import json
+import logging
 import random 
+
+logger=logging.getLogger(__name__)
 
 def filter_layouts(layouts, min_elements=3):
     return [l for l in layouts if len(l["elements"]) >= min_elements]
@@ -23,10 +25,11 @@ def run_filter_balance(input_json, output_json):
     with open(input_json, 'r') as f:
         layouts = json.load(f)
 
+    logger.info("Filtering %s layouts from %s",len(layouts),input_json)
     layouts = filter_layouts(layouts)
     layouts = balance_dataset(layouts)
 
     with open(output_json, 'w') as f:
         json.dump(layouts, f, indent=2)
 
-    print("Filtered + Balanced")
+    logger.info("Filtered + balanced dataset saved to %s (%s layouts)",output_json,len(layouts))
