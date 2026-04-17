@@ -1,0 +1,10 @@
+accelerate
+diffusers
+matplotlib
+numpy
+opencv-python
+pillow
+safetensors
+scikit-learn
+tqdm
+transformers
