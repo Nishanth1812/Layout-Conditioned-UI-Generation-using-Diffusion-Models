@@ -5,7 +5,9 @@ from collections import Counter
 logger=logging.getLogger(__name__)
 
 def generate_caption(layout):
-    types=[el["type"] for el in layout["elements"]]
+    types=[el.get("type") for el in layout.get("elements",[]) if el.get("type")]
+    if not types:
+        return "UI with no valid elements"
     count=Counter(types)
     
     parts=[]
@@ -20,7 +22,7 @@ def generate_all_captions(input_json, output_json):
         layouts = json.load(f)
 
     logger.info("Generating captions for %s layouts from %s",len(layouts),input_json)
-        
+
     for layout in layouts:
         layout["caption"] = generate_caption(layout)
         

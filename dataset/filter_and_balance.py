@@ -5,13 +5,18 @@ import random
 logger=logging.getLogger(__name__)
 
 def filter_layouts(layouts, min_elements=3):
-    return [l for l in layouts if len(l["elements"]) >= min_elements]
+    return [
+        l for l in layouts
+        if len(l.get("elements", [])) >= min_elements
+        and l.get("caption")
+        and l["caption"] != "UI with no valid elements"
+    ]
 
 def balance_dataset(layouts, max_per_type=5000):
     buckets = {}
 
     for layout in layouts:
-        key = layout["caption"]
+        key = layout.get("caption", "uncategorized ui")
         buckets.setdefault(key, []).append(layout)
 
     balanced = []
