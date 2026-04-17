@@ -9,7 +9,8 @@ SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/scratch/ui-gen}"
 source "$VENV_DIR/bin/activate"
 cd "$REPO_DIR"
 
-python -m training.run_train \
+echo "[train] starting training"
+exec python -u -m training.run_train \
   --train-json "${TRAIN_JSON:-$SCRATCH_ROOT/data/processed/splits/train.json}" \
   --tensor-dir "${TENSOR_DIR:-$SCRATCH_ROOT/data/processed/tensors}" \
   --image-dir "${IMAGE_DIR:-$SCRATCH_ROOT/data/raw/images}" \
@@ -19,4 +20,5 @@ python -m training.run_train \
   --lr "${LR:-1e-4}" \
   --num-workers "${NUM_WORKERS:-2}" \
   --precision "${PRECISION:-fp16}" \
-  --base-model "${BASE_MODEL:-runwayml/stable-diffusion-v1-5}"
+  --base-model "${BASE_MODEL:-runwayml/stable-diffusion-v1-5}" \
+  --log-every "${LOG_EVERY:-25}"
