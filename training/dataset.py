@@ -89,7 +89,8 @@ class LayoutDataset(Dataset):
             logger.warning("Skipping sample %s during read: %s", image_id, exc)
             return None
 
-        return {"layout": layout, "control": control, "image": image, "caption": item["caption"]}
+        caption = item.get("caption") or "UI with no valid elements"
+        return {"layout": layout, "control": control, "image": image, "caption": caption}
 
 
 def safe_collate(batch):

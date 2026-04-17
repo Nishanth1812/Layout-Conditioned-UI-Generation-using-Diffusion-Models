@@ -6,30 +6,42 @@ from pathlib import Path
 ALLOWED_TYPES=["Text", "Button", "Image", "Input", "Icon", "Toolbar", "List Item", "Card", "Advertisement", "Background"]
 logger=logging.getLogger(__name__)
 
-# w = width, h = height
 def normalize_bbox(bounds,w,h):
-    x1,y1,x2,y2=bounds
+    if not isinstance(bounds,(list,tuple)) or len(bounds) != 4:
+        return None
+    try:
+        x1,y1,x2,y2=(float(v) for v in bounds)
+    except (TypeError,ValueError):
+        return None
     w=max(w,1)
     h=max(h,1)
-    return [x1/w,y1/h,x2/w,y2/h]
+    x1=max(0.0,min(1.0,x1/w))
+    y1=max(0.0,min(1.0,y1/h))
+    x2=max(0.0,min(1.0,x2/w))
+    y2=max(0.0,min(1.0,y2/h))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return [x1,y1,x2,y2]
 
 def extract_elements(node,w,h,elements):
     if not isinstance(node, dict):
         return
 
-    if "bounds" in node and "componentLabel" in node:
-        label=node["componentLabel"] 
-        if label in ALLOWED_TYPES:
-            bbox=normalize_bbox(node["bounds"],w,h) 
-            elements.append({"type":label,"bbox":bbox}) 
+    label=node.get("componentLabel")
+    if label in ALLOWED_TYPES:
+        bbox=normalize_bbox(node.get("bounds"),w,h)
+        if bbox is not None:
+            elements.append({"type":label,"bbox":bbox})
 
-    for child in node.get("children",[]):
+    for child in node.get("children",[]) or []:
         extract_elements(child,w,h,elements) 
 
 
 def process_rico_json(path):
     with open(path,'r') as f:
         data=json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("root is not a JSON object")
 
     bounds=data.get("bounds",[0,0,1440,2560])
     w=bounds[2] if len(bounds) >= 4 and bounds[2] > 0 else 1440
