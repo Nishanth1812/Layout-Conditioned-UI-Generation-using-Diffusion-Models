@@ -16,7 +16,8 @@ def build_parser():
     parser.add_argument("--lr",type=float,default=1e-4,help="Learning rate.")
     parser.add_argument("--num-workers",type=int,default=2,help="DataLoader worker count.")
     parser.add_argument("--precision",choices=["fp32","fp16","bf16"],default="fp16",help="Weights precision to use.")
-    parser.add_argument("--base-model",default="runwayml/stable-diffusion-v1-5",help="Diffusers base model id.")
+    parser.add_argument("--base-model",default="stable-diffusion-v1-5/stable-diffusion-v1-5",help="Diffusers base model id or local path.")
+    parser.add_argument("--hf-token",default=None,help="Optional Hugging Face token for gated models.")
     parser.add_argument("--log-every",type=int,default=25,help="How often to log training step output.")
     return parser
 
@@ -38,6 +39,7 @@ def main():
         "num_workers":args.num_workers,
         "precision":args.precision,
         "base_model":args.base_model,
+        "hf_token":args.hf_token,
         "log_every":args.log_every,
     }
     logging.getLogger(__name__).info("Launching training with config: %s",config)

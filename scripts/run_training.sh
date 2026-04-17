@@ -20,5 +20,6 @@ exec python -u -m training.run_train \
   --lr "${LR:-1e-4}" \
   --num-workers "${NUM_WORKERS:-2}" \
   --precision "${PRECISION:-fp16}" \
-  --base-model "${BASE_MODEL:-runwayml/stable-diffusion-v1-5}" \
+  --base-model "${BASE_MODEL:-stable-diffusion-v1-5/stable-diffusion-v1-5}" \
+  --hf-token "${HF_TOKEN:-}" \
   --log-every "${LOG_EVERY:-25}"

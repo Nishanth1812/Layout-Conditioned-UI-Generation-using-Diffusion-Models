@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm 
 
 from diffusers import StableDiffusionPipeline,DDPMScheduler
+from huggingface_hub import login
 from transformers import CLIPTokenizer
 
 from training.dataset import LayoutDataset
@@ -28,6 +29,11 @@ class Trainer:
         if precision not in precision_map:
             raise ValueError(f"Unsupported precision '{precision}'. Choose from fp32, fp16, bf16.")
         self.weight_dtype=precision_map[precision]
+        self.base_model=config.get('base_model',"stable-diffusion-v1-5/stable-diffusion-v1-5")
+        self.hf_token=config.get('hf_token') or os.environ.get('HF_TOKEN')
+        if self.hf_token:
+            login(token=self.hf_token, add_to_git_credential=False)
+            logger.info("Authenticated with Hugging Face using a provided token")
         
         # Dataset
         self.dataset=LayoutDataset(config['train_json'],config['tensor_dir'],config['image_dir'])
@@ -43,14 +49,11 @@ class Trainer:
         
         logger.info(
             "Initializing Stable Diffusion base model %s on %s with %s precision",
-            config.get('base_model',"runwayml/stable-diffusion-v1-5"),
+            self.base_model,
             self.device,
             precision,
         )
-        self.pipe=StableDiffusionPipeline.from_pretrained(
-            config.get('base_model',"runwayml/stable-diffusion-v1-5"),
-            torch_dtype=self.weight_dtype
-        )
+        self.pipe=StableDiffusionPipeline.from_pretrained(self.base_model, torch_dtype=self.weight_dtype)
         self.pipe.to(self.device)
         
         self.unet=self.pipe.unet
