@@ -12,6 +12,7 @@ cd "$REPO_DIR"
 echo "[train] starting training"
 exec python -u -m training.run_train \
   --train-json "${TRAIN_JSON:-$SCRATCH_ROOT/data/processed/splits/train.json}" \
+  --val-json "${VAL_JSON:-$SCRATCH_ROOT/data/processed/splits/val.json}" \
   --tensor-dir "${TENSOR_DIR:-$SCRATCH_ROOT/data/processed/tensors}" \
   --image-dir "${IMAGE_DIR:-$SCRATCH_ROOT/data/raw/images}" \
   --output-dir "${OUTPUT_DIR:-$SCRATCH_ROOT/checkpoints}" \

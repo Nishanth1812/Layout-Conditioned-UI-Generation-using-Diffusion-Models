@@ -8,6 +8,7 @@ from training.train import Trainer
 def build_parser():
     parser=argparse.ArgumentParser(description="Train the layout-conditioned UI diffusion prototype.")
     parser.add_argument("--train-json",required=True,help="Path to the training split JSON file.")
+    parser.add_argument("--val-json",default=None,help="Optional path to the validation split JSON file.")
     parser.add_argument("--tensor-dir",required=True,help="Directory containing layout tensors (*.npy).")
     parser.add_argument("--image-dir",required=True,help="Directory containing UI screenshots (*.jpg).")
     parser.add_argument("--output-dir",required=True,help="Directory to store checkpoints.")
@@ -32,6 +33,7 @@ def main():
     os.environ.setdefault("PYTHONUNBUFFERED", "1")
     config={
         "train_json":args.train_json,
+        "val_json":args.val_json,
         "tensor_dir":args.tensor_dir,
         "image_dir":args.image_dir,
         "output_dir":args.output_dir,
