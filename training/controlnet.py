@@ -24,9 +24,9 @@ class ControlNet(nn.Module):
         self.down2=nn.Conv2d(128,256,3,stride=2,padding=1)
         self.down3=nn.Conv2d(256,512,3,stride=2,padding=1)
         
-        self.zero1=ZeroConv2d(128,128)
-        self.zero2=ZeroConv2d(256,256)
-        self.zero3=ZeroConv2d(512,512)
+        self.zero1=ZeroConv2d(128,4)
+        self.zero2=ZeroConv2d(256,4)
+        self.zero3=ZeroConv2d(512,4)
         
         self.act=nn.ReLU()
         
