@@ -11,7 +11,7 @@ from diffusers import StableDiffusionPipeline,DDPMScheduler
 from huggingface_hub import login
 from transformers import CLIPTokenizer
 
-from training.dataset import LayoutDataset
+from training.dataset import LayoutDataset, safe_collate
 from training.controlnet import ControlNet
 from models.layout_encoder import LayoutEncoder
 from models.fusion import ConditioningFusion
@@ -66,7 +66,8 @@ class Trainer:
                 batch_size=config.get('val_batch_size',config['batch_size']),
                 shuffle=False,
                 num_workers=config.get('num_workers',0),
-                pin_memory=torch.cuda.is_available()
+                pin_memory=torch.cuda.is_available(),
+                collate_fn=safe_collate,
             )
             logger.info("Loaded validation dataset with %s samples from %s",len(val_dataset),val_json)
         else:
@@ -77,7 +78,8 @@ class Trainer:
             batch_size=config['batch_size'],
             shuffle=True,
             num_workers=config.get('num_workers',0),
-            pin_memory=torch.cuda.is_available()
+            pin_memory=torch.cuda.is_available(),
+            collate_fn=safe_collate,
         )
         
         logger.info(
@@ -202,6 +204,8 @@ class Trainer:
         try:
             with torch.inference_mode():
                 for batch_idx,batch in enumerate(tqdm(self.val_loader,desc=f"Val {epoch}",leave=False), start=1):
+                    if batch is None:
+                        continue
                     loss=self.train_step(batch)
                     total_loss += float(loss.detach().item())
                     total_batches += 1
@@ -260,6 +264,9 @@ class Trainer:
             loop=tqdm(self.loader,desc=f"Epoch {epoch+1}/{target_epoch}")
             
             for batch_idx, batch in enumerate(loop, start=1):
+                if batch is None:
+                    logger.warning("Skipping empty training batch at global_step=%s", self.global_step + 1)
+                    continue
                 self.optimizer.zero_grad(set_to_none=True)
                 loss=self.train_step(batch)
                 if self.scaler.is_enabled():

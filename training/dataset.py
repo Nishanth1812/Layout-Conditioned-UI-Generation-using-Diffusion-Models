@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, default_collate
 
 logger = logging.getLogger(__name__)
 
@@ -76,15 +76,26 @@ class LayoutDataset(Dataset):
         item = self.data[idx]
         image_id = item["image_id"]
 
-        layout = np.load(self.tensor_dir / f"{image_id}.npy", allow_pickle=False)
-        layout = torch.from_numpy(layout).permute(2, 0, 1).float()
+        try:
+            layout = np.load(self.tensor_dir / f"{image_id}.npy", allow_pickle=False)
+            layout = torch.from_numpy(layout).permute(2, 0, 1).float()
 
-        control = layout[:3]
+            control = layout[:3]
 
-        image = Image.open(self.image_dir / f"{image_id}.jpg").convert("RGB")
-        image = image.resize((512, 512))
-        image = torch.from_numpy(np.array(image)).permute(2, 0, 1).float() / 255.0
+            image = Image.open(self.image_dir / f"{image_id}.jpg").convert("RGB")
+            image = image.resize((512, 512))
+            image = torch.from_numpy(np.array(image)).permute(2, 0, 1).float() / 255.0
+        except Exception as exc:
+            logger.warning("Skipping sample %s during read: %s", image_id, exc)
+            return None
 
         return {"layout": layout, "control": control, "image": image, "caption": item["caption"]}
+
+
+def safe_collate(batch):
+    batch = [item for item in batch if item is not None]
+    if not batch:
+        return None
+    return default_collate(batch)
         
         
