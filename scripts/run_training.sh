@@ -16,11 +16,12 @@ exec python -u -m training.run_train \
   --tensor-dir "${TENSOR_DIR:-$SCRATCH_ROOT/data/processed/tensors}" \
   --image-dir "${IMAGE_DIR:-$SCRATCH_ROOT/data/raw/images}" \
   --output-dir "${OUTPUT_DIR:-$SCRATCH_ROOT/checkpoints}" \
-  --epochs "${EPOCHS:-1}" \
-  --batch-size "${BATCH_SIZE:-2}" \
+  --epochs "${EPOCHS:-5}" \
+  --batch-size "${BATCH_SIZE:-4}" \
   --lr "${LR:-1e-4}" \
-  --num-workers "${NUM_WORKERS:-2}" \
+  --num-workers "${NUM_WORKERS:-4}" \
+  --grad-accum-steps "${GRAD_ACCUM_STEPS:-2}" \
   --precision "${PRECISION:-fp16}" \
   --base-model "${BASE_MODEL:-stable-diffusion-v1-5/stable-diffusion-v1-5}" \
   --hf-token "${HF_TOKEN:-}" \
-  --log-every "${LOG_EVERY:-25}"
+  --log-every "${LOG_EVERY:-50}"

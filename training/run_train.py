@@ -16,6 +16,7 @@ def build_parser():
     parser.add_argument("--batch-size",type=int,default=2,help="Training batch size.")
     parser.add_argument("--lr",type=float,default=1e-4,help="Learning rate.")
     parser.add_argument("--num-workers",type=int,default=2,help="DataLoader worker count.")
+    parser.add_argument("--grad-accum-steps",type=int,default=1,help="Number of batches to accumulate before an optimizer step.")
     parser.add_argument("--precision",choices=["fp32","fp16","bf16"],default="fp16",help="Weights precision to use.")
     parser.add_argument("--base-model",default="stable-diffusion-v1-5/stable-diffusion-v1-5",help="Diffusers base model id or local path.")
     parser.add_argument("--hf-token",default=None,help="Optional Hugging Face token for gated models.")
@@ -40,6 +41,7 @@ def main():
         "batch_size":args.batch_size,
         "lr":args.lr,
         "num_workers":args.num_workers,
+        "grad_accum_steps":args.grad_accum_steps,
         "precision":args.precision,
         "base_model":args.base_model,
         "hf_token":args.hf_token,

@@ -35,6 +35,7 @@ class Trainer:
         self.weight_dtype=precision_map[precision]
         self.base_model=config.get('base_model',"stable-diffusion-v1-5/stable-diffusion-v1-5")
         self.hf_token=config.get('hf_token') or os.environ.get('HF_TOKEN')
+        self.grad_accum_steps=max(1,int(config.get('grad_accum_steps',1)))
         self.use_amp=self.device.type=="cuda" and self.weight_dtype in (torch.float16, torch.bfloat16)
         self.autocast_dtype=self.weight_dtype if self.use_amp else torch.float32
         self.scaler=torch.cuda.amp.GradScaler(enabled=self.device.type=="cuda" and self.weight_dtype==torch.float16)
@@ -61,26 +62,32 @@ class Trainer:
                 config['image_dir'],
                 skip_report=os.path.join(self.output_dir,"skipped_val_samples.json"),
             )
-            self.val_loader=DataLoader(
-                val_dataset,
+            val_loader_kwargs=dict(
                 batch_size=config.get('val_batch_size',config['batch_size']),
                 shuffle=False,
                 num_workers=config.get('num_workers',0),
                 pin_memory=torch.cuda.is_available(),
                 collate_fn=safe_collate,
             )
+            if config.get('num_workers',0) > 0:
+                val_loader_kwargs["persistent_workers"]=True
+                val_loader_kwargs["prefetch_factor"]=4
+            self.val_loader=DataLoader(val_dataset, **val_loader_kwargs)
             logger.info("Loaded validation dataset with %s samples from %s",len(val_dataset),val_json)
         else:
             logger.info("No validation split provided; validation will be skipped")
         
-        self.loader=DataLoader(
-            self.dataset,
+        train_loader_kwargs=dict(
             batch_size=config['batch_size'],
             shuffle=True,
             num_workers=config.get('num_workers',0),
             pin_memory=torch.cuda.is_available(),
             collate_fn=safe_collate,
         )
+        if config.get('num_workers',0) > 0:
+            train_loader_kwargs["persistent_workers"]=True
+            train_loader_kwargs["prefetch_factor"]=4
+        self.loader=DataLoader(self.dataset, **train_loader_kwargs)
         
         logger.info(
             "Initializing Stable Diffusion base model %s on %s with %s precision",
@@ -97,6 +104,10 @@ class Trainer:
         self.unet=self.pipe.unet
         self.vae=self.pipe.vae
         self.text_encoder=self.pipe.text_encoder
+        self.vae.requires_grad_(False)
+        self.text_encoder.requires_grad_(False)
+        self.vae.eval()
+        self.text_encoder.eval()
         self.tokenizer=CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14") 
         
         # Additional custom modules 
@@ -146,13 +157,13 @@ class Trainer:
         
     def encode_text(self,captions):
         tokens=self.tokenizer(captions,padding="max_length",max_length=77,truncation=True,return_tensors="pt")
-        input_ids=tokens.input_ids.to(self.device)
+        input_ids=tokens.input_ids.to(self.device, non_blocking=True)
         
         with torch.no_grad():
             return self.text_encoder(input_ids)[0]
         
     def encode_images(self,images):
-        images=images.to(self.device,dtype=self.weight_dtype)
+        images=images.to(self.device,dtype=self.weight_dtype,non_blocking=True)
         images=(images*2.0)-1.0
         
         with torch.no_grad():
@@ -161,9 +172,9 @@ class Trainer:
         return latents
     
     def train_step(self,batch):
-        layouts=batch['layout'].to(self.device,dtype=torch.float32)
-        control=batch['control'].to(self.device,dtype=torch.float32)
-        images=batch['image'].to(self.device)
+        layouts=batch['layout'].to(self.device,dtype=torch.float32,non_blocking=True)
+        control=batch['control'].to(self.device,dtype=torch.float32,non_blocking=True)
+        images=batch['image'].to(self.device, non_blocking=True)
         captions=batch['caption']
         
         with self._autocast():
@@ -257,25 +268,40 @@ class Trainer:
 
     def train(self,epochs):
         target_epoch=self.start_epoch + epochs
-        logger.info("Starting training for %s additional epoch(s) up to epoch %s",epochs,target_epoch)
+        logger.info(
+            "Starting training for %s additional epoch(s) up to epoch %s with batch_size=%s grad_accum_steps=%s",
+            epochs,
+            target_epoch,
+            self.config['batch_size'],
+            self.grad_accum_steps,
+        )
         self._set_training_mode(True)
         for epoch in range(self.start_epoch, target_epoch):
             logger.info("Epoch %s/%s started",epoch+1,target_epoch)
             loop=tqdm(self.loader,desc=f"Epoch {epoch+1}/{target_epoch}")
+            self.optimizer.zero_grad(set_to_none=True)
+            accum_steps=0
             
             for batch_idx, batch in enumerate(loop, start=1):
                 if batch is None:
                     logger.warning("Skipping empty training batch at global_step=%s", self.global_step + 1)
                     continue
-                self.optimizer.zero_grad(set_to_none=True)
-                loss=self.train_step(batch)
+                loss=self.train_step(batch) / self.grad_accum_steps
                 if self.scaler.is_enabled():
                     self.scaler.scale(loss).backward()
+                else:
+                    loss.backward()
+                accum_steps += 1
+                if accum_steps < self.grad_accum_steps:
+                    continue
+
+                if self.scaler.is_enabled():
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
-                    loss.backward()
                     self.optimizer.step()
+                self.optimizer.zero_grad(set_to_none=True)
+                accum_steps = 0
                 self.global_step += 1
                 
                 loop.set_postfix(loss=loss.item())
@@ -288,6 +314,15 @@ class Trainer:
                         batch_idx,
                         loss.item(),
                     )
+
+            if accum_steps > 0:
+                if self.scaler.is_enabled():
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    self.optimizer.step()
+                self.optimizer.zero_grad(set_to_none=True)
+                self.global_step += 1
             
             val_loss=self.validate(epoch+1)
             if val_loss is not None:
