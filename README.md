@@ -1,6 +1,6 @@
 # Layout-Conditioned-UI-Generation-using-Diffusion-Models
 
-This repo now includes a minimal Linux ROCm training workflow for an AMD GPU VM.
+This repo now includes training workflows for both a Linux ROCm VM and a Kaggle dual-T4 setup.
 
 ## Quick Start On The VM
 
@@ -11,6 +11,10 @@ bash scripts/setup_vm.sh
 bash scripts/preprocess_data.sh
 bash scripts/run_training.sh
 ```
+
+## Quick Start On Kaggle
+
+Use the prepared local upload folder [kaggle_code_dataset](kaggle_code_dataset) as your Kaggle code dataset, then follow [Kaggle Training Setup](KAGGLE_TRAINING.md) for the notebook steps.
 
 ## What Each Script Does
 
