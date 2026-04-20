@@ -13,6 +13,12 @@ def _load_unet_state(model_path):
     state = torch.load(model_path, map_location="cpu")
     if isinstance(state, dict) and "unet" in state:
         return state["unet"]
+    if isinstance(state, dict):
+        logger.warning(
+            "Checkpoint %s does not include UNet weights; using base model UNet unchanged",
+            model_path,
+        )
+        return None
     return state
 
 
@@ -20,14 +26,16 @@ def generate_images(model_path, prompts, output_dir, base_model="stable-diffusio
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Loading base model %s", base_model)
+    logger.info("Loading model A weights: base diffusion model %s", base_model)
     pipe_kwargs = {"torch_dtype": torch.float16 if torch.cuda.is_available() else torch.float32}
     if hf_token:
         pipe_kwargs["token"] = hf_token
     pipe = StableDiffusionPipeline.from_pretrained(base_model, **pipe_kwargs)
 
-    logger.info("Loading checkpoint from %s", model_path)
-    pipe.unet.load_state_dict(_load_unet_state(model_path), strict=False)
+    logger.info("Loading model B weights: checkpoint %s", model_path)
+    unet_state = _load_unet_state(model_path)
+    if unet_state is not None:
+        pipe.unet.load_state_dict(unet_state, strict=False)
     pipe = pipe.to("cuda" if torch.cuda.is_available() else "cpu")
 
     for i, prompt in enumerate(prompts):

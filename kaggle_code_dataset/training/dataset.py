@@ -10,6 +10,16 @@ from torch.utils.data import Dataset, default_collate
 
 logger = logging.getLogger(__name__)
 
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def _resolve_image_path(image_dir, image_id):
+    for extension in IMAGE_EXTENSIONS:
+        candidate = image_dir / f"{image_id}{extension}"
+        if candidate.is_file():
+            return candidate
+    return None
+
 class LayoutDataset(Dataset):
     def __init__(self, split_json, tensor_dir, image_dir, skip_report=None):
         with open(split_json, "r") as f:
@@ -35,7 +45,7 @@ class LayoutDataset(Dataset):
                 continue
 
             tensor_path = self.tensor_dir / f"{image_id}.npy"
-            image_path = self.image_dir / f"{image_id}.jpg"
+            image_path = _resolve_image_path(self.image_dir, image_id)
 
             if not tensor_path.is_file():
                 skipped.append(
@@ -43,9 +53,13 @@ class LayoutDataset(Dataset):
                 )
                 continue
 
-            if not image_path.is_file():
+            if image_path is None:
                 skipped.append(
-                    {"image_id": image_id, "reason": "missing_image", "path": str(image_path)}
+                    {
+                        "image_id": image_id,
+                        "reason": "missing_image",
+                        "path": str(self.image_dir / f"{image_id}.[jpg|jpeg|png|webp]"),
+                    }
                 )
                 continue
 
@@ -82,7 +96,7 @@ class LayoutDataset(Dataset):
 
             control = layout[:3]
 
-            image = Image.open(self.image_dir / f"{image_id}.jpg").convert("RGB")
+            image = Image.open(_resolve_image_path(self.image_dir, image_id)).convert("RGB")
             image = image.resize((512, 512))
             image = torch.from_numpy(np.array(image)).permute(2, 0, 1).float() / 255.0
         except Exception as exc:

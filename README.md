@@ -14,7 +14,7 @@ bash scripts/run_training.sh
 
 ## Quick Start On Kaggle
 
-Use the prepared local upload folder [kaggle_code_dataset](kaggle_code_dataset) as your Kaggle code dataset, then follow [Kaggle Training Setup](KAGGLE_TRAINING.md) for the notebook steps.
+Use the prepared local upload folder [kaggle_code_dataset](kaggle_code_dataset) as your Kaggle code dataset, then follow [Kaggle Training Setup](KAGGLE_TRAINING.md) for the notebook steps. The Kaggle launcher now defaults to per-GPU batch size 1, `NUM_WORKERS=2`, `GRAD_ACCUM_STEPS=2`, and `PRECISION=fp16` so both T4s are used without hitting memory limits while still letting the CPU feed the GPUs.
 
 ## What Each Script Does
 

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 ALLOWED_TYPES=["Text", "Button", "Image", "Input", "Icon", "Toolbar", "List Item", "Card", "Advertisement", "Background"]
@@ -52,33 +53,85 @@ def process_rico_json(path):
 
     return {"image_id":os.path.basename(path).replace(".json",""),"elements":elements}
 
-def run_extraction(input_dir,output_file,skipped_file=None):
-    logger.info("Scanning JSON files in %s",input_dir)
-    all_layouts=[]
-    skipped=[]
-    
-    for f in sorted(os.listdir(input_dir)):
-        if f.endswith(".json"):
-            path=Path(input_dir)/f
-            try:
-                layout=process_rico_json(path)
-            except Exception as exc:
-                skipped.append({"image_id":path.stem,"file":str(path),"reason":f"parse_error:{exc}"})
-                continue
+def _worker_count(explicit):
+    if explicit is not None:
+        return max(1, int(explicit))
 
-            if len(layout["elements"]) >0:
+    raw = os.environ.get("EXTRACT_WORKERS") or os.environ.get("PREPROCESS_WORKERS")
+    if raw:
+        try:
+            value = int(raw)
+            if value > 0:
+                return value
+        except ValueError:
+            pass
+
+    return max(1, min((os.cpu_count() or 1), 8))
+
+def _process_file(path):
+    path = Path(path)
+    try:
+        layout = process_rico_json(path)
+    except Exception as exc:
+        return None, {"image_id": path.stem, "file": str(path), "reason": f"parse_error:{exc}"}
+
+    if layout["elements"]:
+        return layout, None
+
+    return None, {"image_id": layout["image_id"], "file": str(path), "reason": "no_allowed_elements"}
+
+def run_extraction(input_dir, output_file, skipped_file=None, num_workers=None, log_every=500, **_kwargs):
+    input_path = Path(input_dir)
+    json_files = sorted(input_path.glob("*.json"))
+    total = len(json_files)
+    all_layouts = []
+    skipped = []
+    workers = _worker_count(num_workers)
+
+    logger.info("Scanning %s JSON files in %s using %s worker(s)", total, input_dir, workers)
+    if total == 0:
+        raise ValueError(f"No JSON files found in {input_dir}")
+
+    if workers == 1:
+        iterator = map(_process_file, json_files)
+        for index, (layout, skipped_item) in enumerate(iterator, start=1):
+            if layout is not None:
                 all_layouts.append(layout)
-            else:
-                skipped.append({"image_id":layout["image_id"],"file":str(path),"reason":"no_allowed_elements"})
+            if skipped_item is not None:
+                skipped.append(skipped_item)
+            if index == 1 or index % log_every == 0 or index == total:
+                logger.info(
+                    "Extracted progress: %s/%s files processed, %s layouts kept, %s skipped",
+                    index,
+                    total,
+                    len(all_layouts),
+                    len(skipped),
+                )
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            iterator = executor.map(_process_file, json_files, chunksize=16)
+            for index, (layout, skipped_item) in enumerate(iterator, start=1):
+                if layout is not None:
+                    all_layouts.append(layout)
+                if skipped_item is not None:
+                    skipped.append(skipped_item)
+                if index == 1 or index % log_every == 0 or index == total:
+                    logger.info(
+                        "Extracted progress: %s/%s files processed, %s layouts kept, %s skipped",
+                        index,
+                        total,
+                        len(all_layouts),
+                        len(skipped),
+                    )
 
-    with open(output_file,'w') as f:
-        json.dump(all_layouts,f,indent=2)
+    with open(output_file, 'w') as f:
+        json.dump(all_layouts, f, indent=2)
 
     if skipped_file:
-        with open(skipped_file,'w') as f:
-            json.dump(skipped,f,indent=2)
+        with open(skipped_file, 'w') as f:
+            json.dump(skipped, f, indent=2)
 
-    logger.info("Extracted %s layouts to %s",len(all_layouts),output_file)
-    logger.info("Skipped %s layouts",len(skipped))
-    if skipped:
-        logger.info("Skipped sample notes written to %s",skipped_file)
+    logger.info("Extracted %s layouts to %s", len(all_layouts), output_file)
+    logger.info("Skipped %s layouts", len(skipped))
+    if skipped and skipped_file:
+        logger.info("Skipped sample notes written to %s", skipped_file)
