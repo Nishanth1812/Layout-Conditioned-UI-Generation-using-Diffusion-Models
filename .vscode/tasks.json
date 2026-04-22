@@ -1,0 +1,214 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "upload-and-run-modal-pipeline",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"H:\\Personal\\Projects\\Layout-Conditioned-UI-Generation-using-Diffusion-Models\\run_modal_pipeline.ps1"
+			],
+			"group": "build"
+		},
+		{
+			"label": "locate-cerebrium",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Get-ChildItem -Path $env:APPDATA\\npm, $env:ProgramFiles\\nodejs -Filter 'cerebrium*' -File -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table -AutoSize"
+			],
+			"group": "build"
+		},
+		{
+			"label": "find-cerebrium-npm",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Get-ChildItem \"$env:APPDATA\\npm\" -Filter 'cerebrium*' -File | ForEach-Object { $_.FullName }"
+			],
+			"group": "build"
+		},
+		{
+			"label": "find-cerebrium-wide",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$paths=@('C:\\Users\\Devab','C:\\Program Files','C:\\Program Files (x86)','C:\\Users\\Devab\\AppData\\Local\\Programs','C:\\Users\\Devab\\AppData\\Roaming'); foreach($p in $paths){ if(Test-Path $p){ Get-ChildItem $p -Filter 'cerebrium*' -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName } } }"
+			],
+			"group": "build"
+		},
+		{
+			"label": "find-cerebrium-wide-2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$paths=@(\"C:\\Users\\Devab\",\"C:\\Program Files\",\"C:\\Program Files (x86)\",\"C:\\Users\\Devab\\AppData\\Local\\Programs\",\"C:\\Users\\Devab\\AppData\\Roaming\"); foreach($p in $paths){ if(Test-Path $p){ Get-ChildItem $p -Filter 'cerebrium*' -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName } } }"
+			],
+			"group": "build"
+		},
+		{
+			"label": "find-cerebrium-where",
+			"type": "shell",
+			"command": "where.exe",
+			"args": [
+				"/r",
+				"C:\\",
+				"cerebrium.cmd"
+			],
+			"group": "build"
+		},
+		{
+			"label": "cerebrium-run-fullpath",
+			"type": "shell",
+			"command": "H:\\Personal\\Projects\\Layout-Conditioned-UI-Generation-using-Diffusion-Models\\.venv\\Scripts\\cerebrium.exe",
+			"args": [
+				"run",
+				"main.py::run_pipeline",
+				"--data",
+				"{\"source\":\"/persistent-storage/ui-gen/downloads/dataset.zip\",\"preprocess_workers\":8,\"tensor_workers\":8,\"log_every\":10,\"epochs\":20,\"batch_size\":4,\"num_workers\":4,\"precision\":\"bf16\"}"
+			],
+			"group": "build"
+		},
+		{
+			"label": "run-modal-pipeline",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"H:\\Personal\\Projects\\Layout-Conditioned-UI-Generation-using-Diffusion-Models\\run_modal_pipeline.ps1"
+			],
+			"group": "build"
+		},
+		{
+			"label": "pycompile-main",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"-m",
+				"py_compile",
+				"main.py"
+			],
+			"group": "build"
+		},
+		{
+			"label": "pycompile-main-after-background-refactor",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"-m",
+				"py_compile",
+				"main.py"
+			],
+			"group": "build"
+		},
+		{
+			"label": "pycompile-main-jsonsafe",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"-m",
+				"py_compile",
+				"main.py"
+			],
+			"group": "build"
+		},
+		{
+			"label": "git-state-check",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"git status --short --branch"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "pycompile-final-check",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"& 'H:\\Personal\\Projects\\Layout-Conditioned-UI-Generation-using-Diffusion-Models\\.venv\\Scripts\\python.exe' -m py_compile 'H:\\Personal\\Projects\\Layout-Conditioned-UI-Generation-using-Diffusion-Models\\main.py' 'H:\\Personal\\Projects\\Layout-Conditioned-UI-Generation-using-Diffusion-Models\\dataset\\extract_layout.py' 'H:\\Personal\\Projects\\Layout-Conditioned-UI-Generation-using-Diffusion-Models\\training\\dataset.py'"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "list-branches",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"git branch --list"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "status-check",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"git status --short"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "switch-to-mvp-and-delete-branch",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"git switch mvp; git branch -D codex/cerebrium; git status --short --branch"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "stash-switch-delete",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"git stash push -u -m 'codex/cerebrium wip'; git switch mvp; git branch -D codex/cerebrium; git status --short --branch"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "force-switch-to-mvp",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"git switch -f mvp; git branch -D codex/cerebrium; git status --short --branch"
+			],
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}

@@ -53,6 +53,8 @@ class Trainer:
         os.makedirs(self.output_dir, exist_ok=True)
         self.save_unet_in_checkpoint = bool(config.get("save_unet_in_checkpoint", False))
         self.max_checkpoints = max(0, int(config.get("max_checkpoints", 2) or 0))
+        self.use_latent_cache = bool(config.get("use_latent_cache", False))
+        self.latent_dir = config.get("latent_dir") if self.use_latent_cache else None
 
         precision = config.get("precision", "fp16")
         precision_map = {
@@ -73,9 +75,9 @@ class Trainer:
         self.hf_token = config.get("hf_token") or os.environ.get("HF_TOKEN")
         self.grad_accum_steps = max(1, int(config.get("grad_accum_steps", 1)))
         self.max_grad_norm = float(config.get("max_grad_norm", 1.0))
-        requested_sample_limit = int(config.get("train_sample_limit", 10000) or 10000)
-        # Keep training fast by default while allowing up to 20k samples.
-        self.train_sample_limit = max(1, min(20000, requested_sample_limit))
+        requested_sample_limit = int(config.get("train_sample_limit", 30000) or 30000)
+        # Keep the sample cap bounded at 30k to match the preprocessing limit.
+        self.train_sample_limit = max(1, min(30000, requested_sample_limit))
         self.sample_seed = int(config.get("sample_seed", 42))
         max_train_hours = float(config.get("max_train_hours", 0) or 0)
         self.max_train_seconds = max_train_hours * 3600.0 if max_train_hours > 0 else None
@@ -99,13 +101,16 @@ class Trainer:
             login(token=self.hf_token, add_to_git_credential=False)
             logger.info("Authenticated with Hugging Face using a provided token")
 
+        logger.info("Loading training dataset from %s", config["train_json"])
         self.dataset = LayoutDataset(
             config["train_json"],
             config["tensor_dir"],
             config["image_dir"],
             skip_report=os.path.join(self.output_dir, "skipped_train_samples.json"),
+            latent_dir=self.latent_dir,
         )
         raw_train_size = len(self.dataset)
+        logger.info("Dataset loaded: %s valid samples before capping", raw_train_size)
         if raw_train_size > self.train_sample_limit:
             generator = torch.Generator()
             generator.manual_seed(self.sample_seed)
@@ -139,6 +144,7 @@ class Trainer:
         else:
             logger.info("No validation split provided; validation will be skipped")
 
+        logger.info("Building training dataloader")
         train_loader_kwargs = dict(
             batch_size=config["batch_size"],
             shuffle=True,
@@ -156,15 +162,18 @@ class Trainer:
         self.loader = DataLoader(self.dataset, **train_loader_kwargs)
 
         logger.info("Loading model A weights: base diffusion model %s on %s", self.base_model, self.device)
+        logger.info("Downloading or loading base Stable Diffusion weights")
         pretrained_kwargs = {"torch_dtype": self.weight_dtype, "low_cpu_mem_usage": True}
         if self.hf_token:
             pretrained_kwargs["token"] = self.hf_token
         self.pipe = StableDiffusionPipeline.from_pretrained(self.base_model, **pretrained_kwargs)
+        logger.info("Base diffusion model loaded")
         self.pipe.to(self.device)
 
         self.unet = self.pipe.unet
         self.vae = self.pipe.vae
         self.text_encoder = self.pipe.text_encoder
+        logger.info("Preparing frozen diffusion components")
         self.unet.to(dtype=self.weight_dtype)
         self.unet.requires_grad_(False)
         self.unet.eval()
@@ -173,6 +182,7 @@ class Trainer:
         self.vae.eval()
         self.text_encoder.eval()
         self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+        logger.info("Tokenizer loaded")
 
         if hasattr(self.unet, "enable_gradient_checkpointing"):
             self.unet.enable_gradient_checkpointing()
@@ -182,6 +192,7 @@ class Trainer:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+        logger.info("Building trainable modules")
         self.controlnet = ControlNet().to(self.device, dtype=self.trainable_dtype)
         self.layout_encoder = LayoutEncoder().to(self.device, dtype=self.trainable_dtype)
         self.fusion = ConditioningFusion().to(self.device, dtype=self.trainable_dtype)
@@ -242,6 +253,7 @@ class Trainer:
             self.output_dir,
             len(self.loader),
         )
+        logger.info("Latent cache enabled: %s (latent_dir=%s)", self.use_latent_cache, self.latent_dir)
 
     def _latest_checkpoint(self):
         latest_path = Path(self.output_dir) / "latest.pt"
@@ -297,14 +309,14 @@ class Trainer:
         )
         input_ids = tokens.input_ids.to(self.device, non_blocking=True)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             return self.text_encoder(input_ids)[0]
 
     def encode_images(self, images):
         images = images.to(self.device, dtype=self.weight_dtype, non_blocking=True)
         images = (images * 2.0) - 1.0
 
-        with torch.no_grad():
+        with torch.inference_mode():
             latents = self.vae.encode(images).latent_dist.sample()
             latents = latents * 0.18215
         return latents
@@ -312,11 +324,17 @@ class Trainer:
     def train_step(self, batch):
         layouts = batch["layout"].to(self.device, dtype=torch.float32, non_blocking=True)
         control = batch["control"].to(self.device, dtype=torch.float32, non_blocking=True)
-        images = batch["image"].to(self.device, non_blocking=True)
+        latents = batch.get("latent")
+        images = batch.get("image")
         captions = batch["caption"]
 
         with self._autocast():
-            latents = self.encode_images(images)
+            if latents is not None:
+                latents = latents.to(self.device, dtype=self.weight_dtype, non_blocking=True)
+            else:
+                if images is None:
+                    raise ValueError("Batch is missing both latent and image tensors")
+                latents = self.encode_images(images)
             noise = torch.randn_like(latents)
             timesteps = torch.randint(
                 0,
@@ -541,6 +559,7 @@ class Trainer:
             self.config["batch_size"],
             self.grad_accum_steps,
         )
+        logger.info("Training loop initialized; waiting for batches from the dataloader")
         self._set_training_mode(True)
         for epoch in range(self.start_epoch, target_epoch):
             logger.info("Epoch %s/%s started", epoch + 1, target_epoch)
@@ -566,6 +585,9 @@ class Trainer:
                 if batch is None:
                     logger.warning("Skipping empty training batch at global_step=%s", self.global_step + 1)
                     continue
+
+                if self.global_step == 0 and batch_idx == start_batch_idx + 1 and self.is_rank0:
+                    logger.info("First training batch received; beginning optimization")
 
                 step_start = time.monotonic()
                 raw_loss = self.train_step(batch)
@@ -613,7 +635,12 @@ class Trainer:
                 gpu_reserved = memory_stats[1] if memory_stats is not None else 0.0
                 window_loss = window_loss_total / max(1, window_batches)
                 epoch_loss = epoch_loss_total / max(1, epoch_batches)
-                samples_per_sec = (batch["image"].shape[0] * self.grad_accum_steps) / max(batch_time, 1e-8)
+                sample_batch = batch.get("latent")
+                if sample_batch is None:
+                    sample_batch = batch.get("image")
+                if sample_batch is None:
+                    sample_batch = batch["layout"]
+                samples_per_sec = (sample_batch.shape[0] * self.grad_accum_steps) / max(batch_time, 1e-8)
 
                 loop.set_postfix(
                     loss=f"{raw_loss_value:.4f}",

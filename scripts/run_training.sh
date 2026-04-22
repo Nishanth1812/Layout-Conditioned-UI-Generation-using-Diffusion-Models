@@ -26,7 +26,7 @@ exec python -u -m training.run_train \
   --num-workers "${NUM_WORKERS:-4}" \
   --grad-accum-steps "${GRAD_ACCUM_STEPS:-1}" \
   --precision "${PRECISION:-bf16}" \
-  --train-sample-limit "${TRAIN_SAMPLE_LIMIT:-10000}" \
+  --train-sample-limit "${TRAIN_SAMPLE_LIMIT:-20000}" \
   --sample-seed "${SAMPLE_SEED:-42}" \
   --base-model "${BASE_MODEL:-stable-diffusion-v1-5/stable-diffusion-v1-5}" \
   --hf-token "${HF_TOKEN:-}" \

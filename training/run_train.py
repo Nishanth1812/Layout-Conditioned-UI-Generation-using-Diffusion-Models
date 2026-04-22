@@ -20,7 +20,7 @@ def build_parser():
     parser.add_argument("--num-workers",type=int,default=4,help="DataLoader worker count per process.")
     parser.add_argument("--grad-accum-steps",type=int,default=1,help="Number of batches to accumulate before an optimizer step.")
     parser.add_argument("--precision",choices=["fp32","fp16","bf16"],default="bf16",help="Weights precision to use.")
-    parser.add_argument("--train-sample-limit",type=int,default=10000,help="Target number of training samples; always capped to <= 20000.")
+    parser.add_argument("--train-sample-limit",type=int,default=30000,help="Target number of training samples; defaults to 30000 and is capped at 30000.")
     parser.add_argument("--sample-seed",type=int,default=42,help="Random seed used when subsampling the training set.")
     parser.add_argument("--base-model",default="stable-diffusion-v1-5/stable-diffusion-v1-5",help="Diffusers base model id or local path.")
     parser.add_argument("--hf-token",default=None,help="Optional Hugging Face token for gated models.")
@@ -41,13 +41,13 @@ def main():
     )
     os.environ.setdefault("PYTHONUNBUFFERED", "1")
     os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "INFO")
-    # Add a file handler so logs are persisted in Kaggle batch runs.
+    # Add a file handler so logs are persisted in batch runs.
     try:
         rank = os.environ.get("LOCAL_RANK") or os.environ.get("RANK") or "0"
         world_size = int(os.environ.get("WORLD_SIZE", "1"))
         log_file = os.environ.get("LOG_FILE")
         if not log_file:
-            scratch = os.environ.get("SCRATCH_ROOT", "/kaggle/working/ui-gen")
+            scratch = os.environ.get("SCRATCH_ROOT", "/mnt/scratch/ui-gen")
             log_file = os.path.join(scratch, "train.log")
         # allow templated filenames like '/path/train.{rank}.log'
         if "{rank}" in log_file:
