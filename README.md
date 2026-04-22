@@ -1,6 +1,6 @@
 # Layout-Conditioned-UI-Generation-using-Diffusion-Models
 
-This repo now includes training workflows for both a Linux ROCm VM and a Kaggle dual-T4 setup.
+This repo now includes training workflows for a Linux ROCm VM and a Modal A10G launcher.
 
 ## Quick Start On The VM
 
@@ -12,9 +12,29 @@ bash scripts/preprocess_data.sh
 bash scripts/run_training.sh
 ```
 
-## Quick Start On Kaggle
+## Quick Start On Modal
 
-Use the prepared local upload folder [kaggle_code_dataset](kaggle_code_dataset) as your Kaggle code dataset, then follow [Kaggle Training Setup](KAGGLE_TRAINING.md) for the notebook steps. The Kaggle launcher now defaults to per-GPU batch size 1, `NUM_WORKERS=2`, `GRAD_ACCUM_STEPS=2`, and `PRECISION=fp16` so both T4s are used without hitting memory limits while still letting the CPU feed the GPUs.
+Use [main.py](main.py) with the Modal CLI to launch training on an A10G GPU. The launcher defaults to a 20,000-sample training cap, `bf16` precision, and the existing `/data/ui-gen` scratch layout so it matches the repo's preprocessing output.
+
+Create a Modal secret for Kaggle credentials (run once):
+
+```bash
+modal secret create "Kaggle Secret" KAGGLE_USERNAME=YOUR_USERNAME KAGGLE_KEY=YOUR_KEY
+```
+
+Run the Windows launcher script. It downloads the dataset from Kaggle directly inside Modal, preprocesses it inside Modal, then starts detached training:
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\run_modal_pipeline.ps1 -KaggleDataset "owner/dataset-slug" -SecretName "Kaggle Secret"
+```
+
+If your Kaggle dataset contains multiple zip files, choose one explicitly:
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\run_modal_pipeline.ps1 -KaggleDataset "owner/dataset-slug" -KaggleFile "archive.zip" -SecretName "Kaggle Secret"
+```
+
+The detached training step logs Kaggle download, extraction, preprocessing, and training progress inside Modal.
 
 ## What Each Script Does
 

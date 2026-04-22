@@ -9,3 +9,5 @@ safetensors
 scikit-learn
 tqdm
 transformers
+modal
+kaggle

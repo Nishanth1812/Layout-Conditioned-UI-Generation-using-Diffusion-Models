@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -80,9 +81,13 @@ def _worker_count(explicit):
 
     return max(1, min((os.cpu_count() or 1), 8))
 
-def run_extraction(input_dir, output_file, skipped_file=None, num_workers=None, log_every=500, **_kwargs):
+def run_extraction(input_dir, output_file, skipped_file=None, num_workers=None, log_every=500, max_kept=None, sample_seed=42, **_kwargs):
     input_path = Path(input_dir)
-    json_files = sorted(input_path.glob("*.json"))
+    json_files = sorted(input_path.rglob("*.json"))
+    rng = random.Random(sample_seed)
+    rng.shuffle(json_files)
+
+    max_kept = None if max_kept is None else max(1, int(max_kept))
     total = len(json_files)
     all_layouts = []
     skipped = []
@@ -93,32 +98,13 @@ def run_extraction(input_dir, output_file, skipped_file=None, num_workers=None, 
         raise ValueError(f"No JSON files found in {input_dir}")
 
     iterator = None
-    if workers == 1:
-        iterator = map(_process_file, json_files)
-    else:
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            iterator = executor.map(_process_file, json_files, chunksize=16)
-            for index, (layout, skipped_item) in enumerate(iterator, start=1):
-                if layout is not None:
-                    all_layouts.append(layout)
-                if skipped_item is not None:
-                    skipped.append(skipped_item)
-                if index == 1 or index % log_every == 0 or index == total:
-                    logger.info(
-                        "Extracted progress: %s/%s files processed, %s layouts kept, %s skipped",
-                        index,
-                        total,
-                        len(all_layouts),
-                        len(skipped),
-                    )
-
-    if workers == 1:
+    def _consume_results(iterator):
         for index, (layout, skipped_item) in enumerate(iterator, start=1):
             if layout is not None:
                 all_layouts.append(layout)
             if skipped_item is not None:
                 skipped.append(skipped_item)
-            if index == 1 or index % log_every == 0 or index == total:
+            if index == 1 or index % log_every == 0 or index == total or (max_kept is not None and len(all_layouts) >= max_kept):
                 logger.info(
                     "Extracted progress: %s/%s files processed, %s layouts kept, %s skipped",
                     index,
@@ -126,6 +112,15 @@ def run_extraction(input_dir, output_file, skipped_file=None, num_workers=None, 
                     len(all_layouts),
                     len(skipped),
                 )
+            if max_kept is not None and len(all_layouts) >= max_kept:
+                logger.info("Reached max_kept=%s usable layouts; stopping extraction early", max_kept)
+                return
+
+    if workers == 1:
+        _consume_results(map(_process_file, json_files))
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            _consume_results(executor.map(_process_file, json_files, chunksize=16))
 
     with open(output_file, "w") as f:
         json.dump(all_layouts, f, indent=2)
